@@ -14,6 +14,8 @@ export type TripPatch = Partial<Pick<Trip, "genError" | "locked" | "genDirty">>;
 export interface Store {
   createTrip(trip: Trip): Promise<void>;
   getTrip(id: string): Promise<Trip | null>;
+  /** The most recently created trip's id, if any. */
+  getLatestTripId(): Promise<string | null>;
   updateTrip(id: string, patch: TripPatch): Promise<void>;
 
   /** Atomically idle (or stale) → running, clearing the dirty flag. True if this caller won. */

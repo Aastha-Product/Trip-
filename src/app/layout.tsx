@@ -22,7 +22,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <span aria-hidden className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 text-base text-white shadow-md shadow-violet-600/30">✈</span>
             Plan Pakka
           </Link>
-          <Link href="/" className="rounded-full border border-violet-200 bg-white px-4 py-2 text-sm font-semibold text-violet-700 hover:bg-violet-50">
+          <Link href="/new" className="rounded-full border border-violet-200 bg-white px-4 py-2 text-sm font-semibold text-violet-700 hover:bg-violet-50">
             + New trip
           </Link>
         </header>

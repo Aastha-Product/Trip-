@@ -100,6 +100,13 @@ export function createSupabaseStore(url: string, serviceKey: string): Store {
       );
     },
 
+    async getLatestTripId() {
+      const row = check(
+        await db.from("trips").select("id").order("created_at", { ascending: false }).limit(1).maybeSingle<{ id: string }>(),
+      );
+      return row?.id ?? null;
+    },
+
     async getTrip(id) {
       const row = check(await db.from("trips").select("*").eq("id", id).maybeSingle<TripRow>());
       return row ? toTrip(row) : null;

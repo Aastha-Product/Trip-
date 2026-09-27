@@ -56,6 +56,9 @@ export const localStore: Store = {
 
   getTrip: (id) => read((db) => db.trips.find((t) => t.id === id) ?? null),
 
+  getLatestTripId: () =>
+    read((db) => [...db.trips].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]?.id ?? null),
+
   updateTrip: (id, patch) =>
     mutate((db) => {
       const t = db.trips.find((x) => x.id === id);
