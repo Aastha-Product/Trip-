@@ -12,7 +12,8 @@ export const MIN_MEMBERS = 2;
  */
 function publicReason(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
-  if (/GEMINI_API_KEY missing/.test(msg)) return "the AI key isn't set up";
+  if (/API_KEY missing/.test(msg)) return "the AI key isn't set up";
+  if (/credit|insufficient_quota|billing/i.test(msg)) return "the AI account has no credits";
   if (/API key|header|401|403|PERMISSION/i.test(msg)) return "the AI key was rejected";
   if (/429|quota|RESOURCE_EXHAUSTED/i.test(msg)) return "the AI is busy right now";
   if (/timeout|timed out|ETIMEDOUT|aborted/i.test(msg)) return "the AI took too long";

@@ -1,5 +1,7 @@
 import "server-only";
 import { GoogleGenAI } from "@google/genai";
+import OpenAI from "openai";
+import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import { checkPerson, checkPlan, daysBetween, rankRecommendations, type RawPerson } from "./analysis";
 import { formatDateRange, formatINR } from "./format";
@@ -17,7 +19,11 @@ import {
   type Trip,
 } from "./types";
 
-const MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash";
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5.4-mini";
+
+/** Tolerates a pasted value with stray whitespace or the key pasted twice. */
+const envKey = (name: string) => process.env[name]?.trim().split(/\s+/)[0] || null;
 
 const strip = (label: string) => label.replace(/^\S+\s/, ""); // drop the emoji
 
@@ -63,9 +69,9 @@ const NO_PRONOUNS =
 
 /* ----------------------------- Step 1: research ----------------------------- */
 
-async function research(ai: GoogleGenAI, trip: Trip, members: Member[], snapshot: GroupSnapshot) {
-  const prompt = [
-    "You are researching a group trip for friends in India. Use Google Search for current, realistic numbers.",
+function researchPrompt(trip: Trip, members: Member[], snapshot: GroupSnapshot) {
+  return [
+    "You are researching a group trip for friends in India. Search the web for current, realistic numbers.",
     `Trip window: ${trip.windowStart} to ${trip.windowEnd}. Year matters for weather and festivals.`,
     trip.ideas ? `The coordinator already has these ideas in mind: ${trip.ideas}` : "",
     "",
@@ -83,24 +89,23 @@ async function research(ai: GoogleGenAI, trip: Trip, members: Member[], snapshot
   ]
     .filter(Boolean)
     .join("\n");
+}
 
-  const res = await ai.models.generateContent({
-    model: MODEL,
-    contents: prompt,
-    config: { tools: [{ googleSearch: {} }], temperature: 0.4, httpOptions: { timeout: 120_000 } },
-  });
-
-  const chunks = res.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
+function dedupeSources(list: { title?: string | null; url?: string | null }[]): Source[] {
   const seen = new Set<string>();
-  const sources: Source[] = [];
-  for (const c of chunks) {
-    const title = c.web?.title?.trim();
-    const url = c.web?.uri;
-    if (!title || !url || seen.has(title)) continue;
+  const out: Source[] = [];
+  for (const src of list) {
+    let title = src.title?.trim() ?? "";
+    if (!title && src.url) {
+      try {
+        title = new URL(src.url).hostname.replace(/^www\./, "");
+      } catch {}
+    }
+    if (!title || !src.url || seen.has(title)) continue;
     seen.add(title);
-    sources.push({ title, url });
+    out.push({ title, url: src.url });
   }
-  return { notes: res.text ?? "", sources: sources.slice(0, 10) };
+  return out.slice(0, 10);
 }
 
 /* ----------------------------- Step 2: structure ---------------------------- */
@@ -127,7 +132,8 @@ const aiSchema = z.object({
         people: z.array(
           z.object({
             memberId: z.string(),
-            score: z.number().int().min(0).max(100).describe("How happy this person would be, 0-100"),
+            // No min/max here: not every provider's strict mode accepts them; checkPerson clamps to 0–100.
+            score: z.number().int().describe("How happy this person would be, 0-100"),
             reason: z.string().describe("One specific sentence, max ~20 words"),
             travelHours: z.number().nullable().describe("Estimated one-way door-to-door hours from their home city"),
             dealbreakerHit: z
@@ -161,14 +167,10 @@ const aiSchema = z.object({
     .describe("Exactly 3 recommendations, best first"),
 });
 
-async function structure(
-  ai: GoogleGenAI,
-  trip: Trip,
-  members: Member[],
-  snapshot: GroupSnapshot,
-  notes: string,
-) {
-  const prompt = [
+type AiOutput = z.infer<typeof aiSchema>;
+
+function structurePrompt(trip: Trip, members: Member[], snapshot: GroupSnapshot, notes: string) {
+  return [
     "Turn the research into exactly 3 trip recommendations for this group of friends. The group decides — you recommend.",
     `All dates must be inside ${trip.windowStart}..${trip.windowEnd}.`,
     "For EVERY recommendation, score EVERY person (use their exact memberId).",
@@ -194,18 +196,82 @@ async function structure(
     "RESEARCH NOTES:",
     notes,
   ].join("\n");
+}
 
-  const res = await ai.models.generateContent({
-    model: MODEL,
-    contents: prompt,
-    config: {
-      responseMimeType: "application/json",
-      responseJsonSchema: z.toJSONSchema(aiSchema),
-      temperature: 0.3,
-      httpOptions: { timeout: 120_000 },
+/* ------------------------------- AI providers -------------------------------- */
+
+/** Each provider does two things: web-grounded research, and schema-shaped output. */
+interface Provider {
+  name: string;
+  research(prompt: string): Promise<{ notes: string; sources: Source[] }>;
+  structure(prompt: string): Promise<AiOutput>;
+}
+
+function openaiProvider(apiKey: string): Provider {
+  const ai = new OpenAI({ apiKey, timeout: 150_000, maxRetries: 1 });
+  return {
+    name: `openai:${OPENAI_MODEL}`,
+    async research(prompt) {
+      const res = await ai.responses.create({ model: OPENAI_MODEL, tools: [{ type: "web_search" }], input: prompt });
+      const citations: { title?: string; url?: string }[] = [];
+      for (const item of res.output) {
+        if (item.type !== "message") continue;
+        for (const part of item.content) {
+          if (part.type !== "output_text") continue;
+          for (const a of part.annotations) if (a.type === "url_citation") citations.push({ title: a.title, url: a.url });
+        }
+      }
+      return { notes: res.output_text, sources: dedupeSources(citations) };
     },
-  });
-  return aiSchema.parse(JSON.parse(res.text ?? ""));
+    async structure(prompt) {
+      const res = await ai.responses.parse({
+        model: OPENAI_MODEL,
+        input: prompt,
+        text: { format: zodTextFormat(aiSchema, "trip_recommendations") },
+      });
+      if (!res.output_parsed) throw new Error("OpenAI returned no structured output");
+      return res.output_parsed;
+    },
+  };
+}
+
+function geminiProvider(apiKey: string): Provider {
+  const ai = new GoogleGenAI({ apiKey });
+  return {
+    name: `gemini:${GEMINI_MODEL}`,
+    async research(prompt) {
+      const res = await ai.models.generateContent({
+        model: GEMINI_MODEL,
+        contents: prompt,
+        config: { tools: [{ googleSearch: {} }], temperature: 0.4, httpOptions: { timeout: 120_000 } },
+      });
+      const chunks = res.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
+      return { notes: res.text ?? "", sources: dedupeSources(chunks.map((c) => ({ title: c.web?.title, url: c.web?.uri }))) };
+    },
+    async structure(prompt) {
+      const res = await ai.models.generateContent({
+        model: GEMINI_MODEL,
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseJsonSchema: z.toJSONSchema(aiSchema),
+          temperature: 0.3,
+          httpOptions: { timeout: 120_000 },
+        },
+      });
+      return aiSchema.parse(JSON.parse(res.text ?? ""));
+    },
+  };
+}
+
+/** OpenAI first when configured; Gemini as the fallback (e.g. if OpenAI is out of credits). */
+function providers(): Provider[] {
+  const list: Provider[] = [];
+  const openaiKey = envKey("OPENAI_API_KEY");
+  const geminiKey = envKey("GEMINI_API_KEY");
+  if (openaiKey) list.push(openaiProvider(openaiKey));
+  if (geminiKey) list.push(geminiProvider(geminiKey));
+  return list;
 }
 
 /* ----------------------------- Step 3: verify ------------------------------- */
@@ -299,21 +365,34 @@ function verify(trip: Trip, members: Member[], parsed: z.infer<typeof aiSchema>)
   return rankRecommendations(recs);
 }
 
-export async function recommend(trip: Trip, members: Member[], snapshot: GroupSnapshot) {
-  // Tolerate a pasted value with stray whitespace or the key pasted twice.
-  const apiKey = process.env.GEMINI_API_KEY?.trim().split(/\s+/)[0];
-  if (!apiKey) throw new Error("AI isn't configured (GEMINI_API_KEY missing).");
-  const ai = new GoogleGenAI({ apiKey });
-
-  const { notes, sources } = await research(ai, trip, members, snapshot);
-  let parsed: z.infer<typeof aiSchema>;
+async function runWith(p: Provider, trip: Trip, members: Member[], snapshot: GroupSnapshot) {
+  const { notes, sources } = await p.research(researchPrompt(trip, members, snapshot));
+  const prompt = structurePrompt(trip, members, snapshot, notes);
+  let parsed: AiOutput;
   try {
-    parsed = await structure(ai, trip, members, snapshot, notes);
+    parsed = await p.structure(prompt);
   } catch (err) {
-    console.warn("[ai] structure step failed once, retrying:", err);
-    parsed = await structure(ai, trip, members, snapshot, notes);
+    console.warn(`[ai] ${p.name} structure step failed once, retrying:`, err);
+    parsed = await p.structure(prompt);
   }
   return { recommendations: verify(trip, members, parsed), sources };
+}
+
+export async function recommend(trip: Trip, members: Member[], snapshot: GroupSnapshot) {
+  const list = providers();
+  if (list.length === 0) throw new Error("AI isn't configured (OPENAI_API_KEY / GEMINI_API_KEY missing).");
+  let lastErr: unknown;
+  for (const [i, p] of list.entries()) {
+    try {
+      const out = await runWith(p, trip, members, snapshot);
+      console.info(`[ai] recommendations from ${p.name}`);
+      return out;
+    } catch (err) {
+      lastErr = err;
+      console.error(`[ai] ${p.name} failed${i < list.length - 1 ? ", trying the next provider" : ""}:`, err);
+    }
+  }
+  throw lastErr;
 }
 
 /** Plain-text summary for the WhatsApp share message. */

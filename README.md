@@ -18,8 +18,8 @@ See [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) for the design 
    - wishlist and notes
 3. **Recommendations update after every response** (once 2+ people have joined):
    - **Code** computes the group snapshot: best dates, the budget that works for most, trip length and dealbreakers (`src/lib/analysis.ts`).
-   - **Gemini + Google Search** researches real destinations, trains, fares, stays and weather (`src/lib/ai.ts`).
-   - **Gemini** turns that into 3 recommendations: cost breakdown, pros and cons, a 0–100 score and reason for every person, and **"make it work for everyone" plans**.
+   - **The AI + web search** researches real destinations, trains, fares, stays and weather (`src/lib/ai.ts`). OpenAI is used first when `OPENAI_API_KEY` is set; Gemini is the automatic fallback.
+   - **The AI** turns that into 3 recommendations: cost breakdown, pros and cons, a 0–100 score and reason for every person, and **"make it work for everyone" plans**.
    - **Code re-checks everything:** each person's dates, budget + stretch and travel limit, and whether each plan actually works for the whole group.
 4. **The group decides** (`/t/[id]`). Each person taps *I'm in* on options and *I'm OK with this* on plans. The coordinator locks in the final choice, and everyone sees "Plan pakka 🎉".
 
@@ -27,11 +27,11 @@ See [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) for the design 
 
 ```bash
 npm install
-cp .env.example .env.local   # add GEMINI_API_KEY
+cp .env.example .env.local   # add OPENAI_API_KEY and/or GEMINI_API_KEY
 npm run dev
 ```
 
-Without Supabase variables, data is stored in `.data/db.json`. Without `GEMINI_API_KEY`, the snapshot still works but no recommendations are generated.
+Without Supabase variables, data is stored in `.data/db.json`. Without an AI key (`OPENAI_API_KEY` or `GEMINI_API_KEY`), the snapshot still works but no recommendations are generated.
 
 ## Deploy (Vercel + Supabase)
 
@@ -40,8 +40,8 @@ Without Supabase variables, data is stored in `.data/db.json`. Without `GEMINI_A
 3. Deploy: `npx vercel` (log in when asked), then add these env vars in the Vercel dashboard, or with `npx vercel env add`:
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `SUPABASE_SERVICE_ROLE_KEY` (server-only)
-   - `GEMINI_API_KEY`
-   - optionally `GEMINI_MODEL` (default `gemini-3.8-flash`)
+   - `OPENAI_API_KEY` (used first; optional `OPENAI_MODEL`, default `gpt-5.4-mini`)
+   - `GEMINI_API_KEY` (fallback; optional `GEMINI_MODEL`, default `gemini-3.8-flash`)
 4. `npx vercel --prod`
 
 Recommendations run in the background after each response. The API routes set `maxDuration = 300` so the AI step has time to finish.
