@@ -8,7 +8,7 @@ import { PrefsSection } from "./PrefsForm";
 import { RecCard, SnapshotCard, Sources, TripHero } from "./views";
 
 /** Only short, known phrases are ever shown; anything else is replaced (raw errors can leak secrets). */
-const SAFE_REASON = /^the AI [a-z '’]{3,40}$/i;
+const SAFE_REASON = /^the AI [A-Za-z '’():;]{3,120}$/;
 
 /** The single trip page everyone sees. The coordinator view passes extra tools. */
 export function TripBody({

@@ -66,7 +66,11 @@ export default async function AdminPage(props: PageProps<"/t/[id]/admin">) {
           <AdminButton tripId={trip.id} adminKey={adminKey} body={{ action: "regenerate" }} label="🔄 Refresh trip ideas" />
           {trip.locked && <AdminButton tripId={trip.id} adminKey={adminKey} body={{ action: "unlock" }} label="Undo decision" />}
         </div>
-        {storageMode() === "local" && <p className="text-xs text-amber-700">Dev mode: data saved to .data/db.json.</p>}
+        <p className="text-xs text-stone-500">
+        AI keys on this site: OpenAI {cfg.openai ? "✓" : "✗"} · Gemini {cfg.gemini ? "✓" : "✗"}
+        {cfg.openai && cfg.gemini && " (OpenAI first, Gemini as backup)"}
+      </p>
+      {storageMode() === "local" && <p className="text-xs text-amber-700">Dev mode: data saved to .data/db.json.</p>}
       </section>
     </>
   );

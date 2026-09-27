@@ -1,5 +1,5 @@
 import "server-only";
-import { recommend } from "./ai";
+import { AllProvidersFailed, recommend } from "./ai";
 import { changeNote, computeSnapshot } from "./analysis";
 import { getStore } from "./store";
 
@@ -11,13 +11,22 @@ export const MIN_MEMBERS = 2;
  * headers (API keys!), so they only ever go to the server log.
  */
 function publicReason(err: unknown): string {
+  if (err instanceof AllProvidersFailed) {
+    return `the AI failed (${err.failures.map((f) => `${f.provider}: ${shortReason(f.error)}`).join("; ")})`;
+  }
   const msg = err instanceof Error ? err.message : String(err);
   if (/API_KEY missing/.test(msg)) return "the AI key isn't set up";
-  if (/credit|insufficient_quota|billing/i.test(msg)) return "the AI account has no credits";
-  if (/API key|header|401|403|PERMISSION/i.test(msg)) return "the AI key was rejected";
-  if (/429|quota|RESOURCE_EXHAUSTED/i.test(msg)) return "the AI is busy right now";
-  if (/timeout|timed out|ETIMEDOUT|aborted/i.test(msg)) return "the AI took too long";
-  return "the AI hit a temporary problem";
+  return `the AI failed (${shortReason(err)})`;
+}
+
+/** A fixed phrase only, so nothing from the raw error (headers, keys) can reach the page. */
+function shortReason(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/credit_balance|insufficient_quota|no credits/i.test(msg)) return "no credits";
+  if (/API key|API_KEY_INVALID|header|401|403|PERMISSION/i.test(msg)) return "key rejected";
+  if (/429|quota|RESOURCE_EXHAUSTED|rate/i.test(msg)) return "usage limit reached";
+  if (/timeout|timed out|ETIMEDOUT|aborted/i.test(msg)) return "took too long";
+  return "temporary problem";
 }
 
 async function generateOnce(tripId: string) {

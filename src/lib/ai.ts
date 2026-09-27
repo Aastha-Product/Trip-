@@ -378,21 +378,28 @@ async function runWith(p: Provider, trip: Trip, members: Member[], snapshot: Gro
   return { recommendations: verify(trip, members, parsed), sources };
 }
 
+/** Thrown when every configured provider failed; carries each provider's error. */
+export class AllProvidersFailed extends Error {
+  constructor(readonly failures: { provider: string; error: unknown }[]) {
+    super(failures.map((f) => `${f.provider}: ${f.error instanceof Error ? f.error.message : String(f.error)}`).join(" | "));
+  }
+}
+
 export async function recommend(trip: Trip, members: Member[], snapshot: GroupSnapshot) {
   const list = providers();
   if (list.length === 0) throw new Error("AI isn't configured (OPENAI_API_KEY / GEMINI_API_KEY missing).");
-  let lastErr: unknown;
+  const failures: { provider: string; error: unknown }[] = [];
   for (const [i, p] of list.entries()) {
     try {
       const out = await runWith(p, trip, members, snapshot);
       console.info(`[ai] recommendations from ${p.name}`);
       return out;
     } catch (err) {
-      lastErr = err;
+      failures.push({ provider: p.name.startsWith("openai") ? "OpenAI" : "Gemini", error: err });
       console.error(`[ai] ${p.name} failed${i < list.length - 1 ? ", trying the next provider" : ""}:`, err);
     }
   }
-  throw lastErr;
+  throw new AllProvidersFailed(failures);
 }
 
 /** Plain-text summary for the WhatsApp share message. */
