@@ -3,6 +3,7 @@ import Link from "next/link";
 import { AdminButton } from "@/components/client";
 import { TripBody } from "@/components/TripBody";
 import { safeEqual } from "@/lib/ids";
+import { configStatus } from "@/lib/config";
 import { storageMode } from "@/lib/store";
 import { loadTrip } from "@/lib/trip-data";
 
@@ -31,21 +32,43 @@ export default async function AdminPage(props: PageProps<"/t/[id]/admin">) {
     );
   }
 
-  const tools = (
-    <section className="card space-y-3 border-violet-200">
-      <div>
-        <p className="font-display text-lg font-bold">👋 {trip.coordinator}, this is your organiser page</p>
-        <p className="text-sm text-stone-600">
-          Bookmark it. Share the link above in your WhatsApp group, add your own preferences below, and lock in the
-          final trip when you&apos;re ready.
-        </p>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <AdminButton tripId={trip.id} adminKey={adminKey} body={{ action: "regenerate" }} label="🔄 Refresh trip ideas" />
-        {trip.locked && <AdminButton tripId={trip.id} adminKey={adminKey} body={{ action: "unlock" }} label="Undo decision" />}
-      </div>
-      {storageMode() === "local" && <p className="text-xs text-amber-700">Dev mode: data saved to .data/db.json.</p>}
+  const cfg = configStatus();
+  const missing = [
+    !cfg.ai && "GEMINI_API_KEY (or OPENAI_API_KEY)",
+    cfg.onVercel && !cfg.supabase && "NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY",
+  ].filter(Boolean) as string[];
+
+  const setup = missing.length > 0 && (
+    <section className="rounded-3xl border-2 border-rose-300 bg-rose-50 p-5 text-rose-900" role="alert">
+      <p className="font-display text-lg font-bold">⚠️ Trip ideas are paused: the site is missing a key</p>
+      <p className="mt-1 text-sm">Missing on this deployment: <strong>{missing.join(", ")}</strong>.</p>
+      <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm">
+        <li>Vercel → your project → <strong>Settings → Environment Variables</strong>.</li>
+        <li>Add the key with exactly that name, paste the value <strong>once</strong>, tick Production + Preview, and Save.</li>
+        <li><strong>Deployments → ⋯ → Redeploy</strong>. Keys only take effect after a redeploy.</li>
+        <li>Come back and tap <strong>Refresh trip ideas</strong>.</li>
+      </ol>
     </section>
+  );
+
+  const tools = (
+    <>
+      {setup}
+      <section className="card space-y-3 border-violet-200">
+        <div>
+          <p className="font-display text-lg font-bold">👋 {trip.coordinator}, this is your organiser page</p>
+          <p className="text-sm text-stone-600">
+            Bookmark it. Share the link above in your WhatsApp group, add your own preferences below, and lock in the
+            final trip when you&apos;re ready.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <AdminButton tripId={trip.id} adminKey={adminKey} body={{ action: "regenerate" }} label="🔄 Refresh trip ideas" />
+          {trip.locked && <AdminButton tripId={trip.id} adminKey={adminKey} body={{ action: "unlock" }} label="Undo decision" />}
+        </div>
+        {storageMode() === "local" && <p className="text-xs text-amber-700">Dev mode: data saved to .data/db.json.</p>}
+      </section>
+    </>
   );
 
   return (

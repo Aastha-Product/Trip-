@@ -62,6 +62,11 @@ export function TripBody({
             <p className="text-sm text-stone-500">Checking trains, prices and weather on Google. About a minute.</p>
           </div>
         </div>
+      ) : trip.genError === "the AI key isn't set up" ? (
+        <p className="rounded-3xl bg-amber-50 p-5 text-sm text-amber-900">
+          ⏸️ Trip ideas are paused while {trip.coordinator} finishes setting up. Your preferences are saved, and ideas
+          will appear here as soon as it&apos;s ready.
+        </p>
       ) : trip.genError ? (
         <p className="rounded-3xl bg-rose-50 p-5 text-sm text-rose-800">
           Couldn&apos;t update the trip ideas ({reason}). It tries again with the next response{recs.length ? ", and the ideas below are from the last update." : "."}
