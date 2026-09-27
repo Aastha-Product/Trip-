@@ -49,3 +49,6 @@ alter table public.trips   enable row level security;
 alter table public.members enable row level security;
 alter table public.results enable row level security;
 alter table public.votes   enable row level security;
+
+-- Make the API see the new tables immediately.
+notify pgrst, 'reload schema';
