@@ -114,19 +114,24 @@ export function createSupabaseStore(url: string, serviceKey: string): Store {
     },
 
     async claimGeneration(id) {
-      const staleBefore = new Date(Date.now() - STALE_GENERATION_MS).toISOString();
-      const won = check(
-        await db
-          .from("trips")
-          .update({ gen_state: "running", gen_dirty: false, gen_started_at: new Date().toISOString() })
-          .eq("id", id)
-          .or(`gen_state.eq.idle,gen_started_at.lt.${staleBefore}`)
-          .select("id"),
-      );
-      if (won && won.length > 0) return true;
+      const tryClaim = async () => {
+        const staleBefore = new Date(Date.now() - STALE_GENERATION_MS).toISOString();
+        const won = check(
+          await db
+            .from("trips")
+            .update({ gen_state: "running", gen_dirty: false, gen_started_at: new Date().toISOString() })
+            .eq("id", id)
+            .or(`gen_state.eq.idle,gen_started_at.lt.${staleBefore}`)
+            .select("id"),
+        );
+        return Boolean(won && won.length > 0);
+      };
+      if (await tryClaim()) return true;
       // Someone else is generating: leave a note so they go again with the new input.
       check(await db.from("trips").update({ gen_dirty: true }).eq("id", id));
-      return false;
+      // That run may have finished between our two calls and missed the note (friends
+      // submitting within the same second). If the trip is idle now, take over.
+      return tryClaim();
     },
 
     async finishGeneration(id, error) {

@@ -88,13 +88,19 @@ export function computeSnapshot(trip: Trip, members: Member[]): GroupSnapshot {
     };
   }
 
-  // Budget band: the ₹5,000-wide band that overlaps the most people's ranges (cheapest on ties).
+  // Budget band: the ₹5,000-wide band that genuinely overlaps (by at least half) the most
+  // people's ranges; ties go to the band with more total overlap, then the cheaper one.
+  const WIDTH = 5000;
   const top = Math.max(...members.map((m) => m.prefs.budgetMax));
-  let band: { min: number; max: number; who: string[] } | null = null;
+  let band: { min: number; max: number; who: string[]; overlap: number } | null = null;
   for (let lo = 0; lo <= top; lo += 1000) {
-    const hi = lo + 5000;
-    const who = members.filter((m) => m.prefs.budgetMin <= hi && m.prefs.budgetMax >= lo).map((m) => m.name);
-    if (!band || who.length > band.who.length) band = { min: lo, max: hi, who };
+    const hi = lo + WIDTH;
+    const overlaps = members.map((m) => Math.min(hi, m.prefs.budgetMax) - Math.max(lo, m.prefs.budgetMin));
+    const who = members.filter((_, i) => overlaps[i] >= WIDTH / 2).map((m) => m.name);
+    const overlap = overlaps.reduce((s, o) => s + Math.max(0, o), 0);
+    if (!band || who.length > band.who.length || (who.length === band.who.length && overlap > band.overlap)) {
+      band = { min: lo, max: hi, who, overlap };
+    }
   }
   if (band) {
     snapshot.budgetBand = {
