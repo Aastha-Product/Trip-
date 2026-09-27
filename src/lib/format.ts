@@ -31,12 +31,12 @@ export const MOOD_META: Record<PersonFit["mood"], { emoji: string; label: string
 export const initials = (name: string) => name.trim().charAt(0).toUpperCase() || "?";
 
 const AVATAR_COLORS = [
-  "bg-orange-500",
+  "bg-indigo-500",
   "bg-teal-600",
   "bg-pink-600",
   "bg-violet-600",
   "bg-sky-600",
-  "bg-amber-600",
+  "bg-fuchsia-600",
   "bg-emerald-600",
   "bg-rose-600",
 ];

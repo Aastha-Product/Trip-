@@ -300,7 +300,8 @@ function verify(trip: Trip, members: Member[], parsed: z.infer<typeof aiSchema>)
 }
 
 export async function recommend(trip: Trip, members: Member[], snapshot: GroupSnapshot) {
-  const apiKey = process.env.GEMINI_API_KEY;
+  // Tolerate a pasted value with stray whitespace or the key pasted twice.
+  const apiKey = process.env.GEMINI_API_KEY?.trim().split(/\s+/)[0];
   if (!apiKey) throw new Error("AI isn't configured (GEMINI_API_KEY missing).");
   const ai = new GoogleGenAI({ apiKey });
 
