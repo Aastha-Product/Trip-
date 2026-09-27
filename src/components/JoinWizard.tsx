@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { formatDateRange, formatINR } from "@/lib/format";
-import { parseMe, saveMe, useMeRaw, type Me } from "@/lib/me";
+import { parseMe, readJson, saveMe, useMeRaw, type Me } from "@/lib/me";
 import {
   DEALBREAKERS,
   DESTINATION_TYPES,
@@ -170,7 +170,7 @@ function Wizard({ tripId, tripName, windowStart, windowEnd, me }: Props & { me: 
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ name: name.trim(), prefs, ...(me ? { memberId: me.memberId, editKey: me.editKey } : {}) }),
       });
-      const data = await res.json();
+      const data = await readJson(res);
       if (!res.ok) throw new Error(data.error ?? "Something went wrong");
       saveMe(tripId, { memberId: data.memberId, editKey: data.editKey, name: name.trim(), prefs });
       router.push(`/t/${tripId}?joined=1`);

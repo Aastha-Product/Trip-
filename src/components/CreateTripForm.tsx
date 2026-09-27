@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { readJson } from "@/lib/me";
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -27,7 +28,7 @@ export function CreateTripForm() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ name, coordinator, windowStart, windowEnd, expectedSize, ideas }),
       });
-      const data = await res.json();
+      const data = await readJson(res);
       if (!res.ok) throw new Error(data.error ?? "Something went wrong");
       try {
         localStorage.setItem(`pp-admin:${data.id}`, data.adminKey);

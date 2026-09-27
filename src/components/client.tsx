@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { parseMe, useMeRaw } from "@/lib/me";
+import { parseMe, readJson, useMeRaw } from "@/lib/me";
 
 const noopSubscribe = () => () => {};
 
@@ -117,7 +117,7 @@ export function VoteBar({ tripId, targetId, yes, no, total, yesLabel, noLabel, c
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ memberId: me.memberId, editKey: me.editKey, targetId, value: mine === value ? "clear" : value }),
       });
-      const data = await res.json();
+      const data = await readJson(res);
       if (!res.ok) throw new Error(data.error ?? "Couldn't save your vote");
       router.refresh();
     } catch (err) {
@@ -208,7 +208,7 @@ export function AdminButton({
               headers: { "content-type": "application/json", "x-admin-key": adminKey },
               body: JSON.stringify(body),
             });
-            const data = await res.json();
+            const data = await readJson(res);
             if (!res.ok) throw new Error(data.error ?? "Something went wrong");
             router.refresh();
           } catch (err) {

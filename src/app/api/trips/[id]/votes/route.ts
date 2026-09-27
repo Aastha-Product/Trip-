@@ -1,9 +1,10 @@
+import { withErrors } from "@/lib/api";
 import { isUuid, safeEqual } from "@/lib/ids";
 import { getStore } from "@/lib/store";
 import { firstIssue, voteInput } from "@/lib/validation";
 
 /** "I'm in" on a recommendation, or "I'm OK with this" on an inclusion plan. */
-export async function POST(request: Request, ctx: RouteContext<"/api/trips/[id]/votes">) {
+export const POST = withErrors(async (request: Request, ctx: RouteContext<"/api/trips/[id]/votes">) => {
   const { id: tripId } = await ctx.params;
   if (!isUuid(tripId)) return Response.json({ error: "Trip not found" }, { status: 404 });
 
@@ -25,4 +26,4 @@ export async function POST(request: Request, ctx: RouteContext<"/api/trips/[id]/
   if (value === "clear") await store.clearVote(tripId, targetId, memberId);
   else await store.setVote({ tripId, targetId, memberId, value, updatedAt: new Date().toISOString() });
   return Response.json({ ok: true });
-}
+});

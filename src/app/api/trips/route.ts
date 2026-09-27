@@ -1,9 +1,10 @@
+import { withErrors } from "@/lib/api";
 import { newId, newSecret } from "@/lib/ids";
 import { getStore } from "@/lib/store";
 import type { Trip } from "@/lib/types";
 import { createTripInput, firstIssue } from "@/lib/validation";
 
-export async function POST(request: Request) {
+export const POST = withErrors(async (request: Request) => {
   const body = await request.json().catch(() => null);
   const parsed = createTripInput.safeParse(body);
   if (!parsed.success) return Response.json({ error: firstIssue(parsed.error) }, { status: 400 });
@@ -27,4 +28,4 @@ export async function POST(request: Request) {
   };
   await getStore().createTrip(trip);
   return Response.json({ id: trip.id, adminKey: trip.adminKey }, { status: 201 });
-}
+});

@@ -1,3 +1,4 @@
+import { withErrors } from "@/lib/api";
 import { after } from "next/server";
 import { requestGeneration } from "@/lib/generate";
 import { isUuid, newId, newSecret } from "@/lib/ids";
@@ -9,7 +10,7 @@ import { firstIssue, memberInput } from "@/lib/validation";
 export const maxDuration = 300;
 
 /** Join the plan (or, with memberId + editKey, update your answers). */
-export async function POST(request: Request, ctx: RouteContext<"/api/trips/[id]/members">) {
+export const POST = withErrors(async (request: Request, ctx: RouteContext<"/api/trips/[id]/members">) => {
   const { id: tripId } = await ctx.params;
   const store = getStore();
   const trip = isUuid(tripId) ? await store.getTrip(tripId) : null;
@@ -53,4 +54,4 @@ export async function POST(request: Request, ctx: RouteContext<"/api/trips/[id]/
   after(() => requestGeneration(tripId));
 
   return Response.json({ memberId: member.id, editKey: member.editKey }, { status: isUpdate ? 200 : 201 });
-}
+});

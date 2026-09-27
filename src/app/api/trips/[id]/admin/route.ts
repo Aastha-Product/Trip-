@@ -1,3 +1,4 @@
+import { withErrors } from "@/lib/api";
 import { after } from "next/server";
 import { MIN_MEMBERS, requestGeneration } from "@/lib/generate";
 import { isUuid, safeEqual } from "@/lib/ids";
@@ -7,7 +8,7 @@ import { adminInput, firstIssue } from "@/lib/validation";
 export const maxDuration = 300;
 
 /** Coordinator-only actions: regenerate, lock the decision, unlock. */
-export async function POST(request: Request, ctx: RouteContext<"/api/trips/[id]/admin">) {
+export const POST = withErrors(async (request: Request, ctx: RouteContext<"/api/trips/[id]/admin">) => {
   const { id: tripId } = await ctx.params;
   const store = getStore();
   const trip = isUuid(tripId) ? await store.getTrip(tripId) : null;
@@ -39,4 +40,4 @@ export async function POST(request: Request, ctx: RouteContext<"/api/trips/[id]/
   }
   await store.updateTrip(tripId, { locked: { recId: rec.id, planId: input.planId, at: new Date().toISOString() } });
   return Response.json({ ok: true });
-}
+});

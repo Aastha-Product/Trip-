@@ -55,3 +55,12 @@ export function useMeRaw(tripId: string): string | null {
     () => null,
   );
 }
+
+/** Reads a JSON API response, even when the server failed without a JSON body. */
+export async function readJson(res: Response): Promise<{ error?: string } & Record<string, string>> {
+  try {
+    return await res.json();
+  } catch {
+    return { error: res.ok ? "Unexpected empty response from the server." : `The server had a problem (error ${res.status}). Please try again in a moment.` };
+  }
+}
